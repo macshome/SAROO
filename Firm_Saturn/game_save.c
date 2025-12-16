@@ -374,7 +374,8 @@ static int find_save(char *file_name, int offset, int *last)
 /******************************************************************************/
 
 
-// ����BIOS��BUP���룬ֻ��devΪ2ʱ�ż��num��
+// 根据BIOS的BUP代码，只有dev为2时才检测num。
+// According to BIOS BUP code, only check num when dev is 2.
 int sro_bup_sel_part(int dev, int num)
 {
 	printk("bup_sel_part(%d): %d\n", dev, num);
@@ -466,7 +467,8 @@ int sro_bup_write(int dev, BUPDIR *dir, u8 *data, int mode)
 	if(dev>1)
 		return BUP_NON;
 
-	// ��������Ŀ�������
+	// 计算所需的块数量。
+// Calculate the number of blocks needed.
 	int block_size = (dev==0) ? 128 : 1024;
 	if(dev==1 && (dir->data_size < (1024-64))){
 		block_need = 0;
@@ -474,12 +476,12 @@ int sro_bup_write(int dev, BUPDIR *dir, u8 *data, int mode)
 		block_need = (dir->data_size+block_size-1)/block_size;
 	}
 
-	// 1. ����dir���Ҵ浵
-	// 1. Search for save in directory
+	// 1. 根据dir查找存档
+// 1. Find save according to dir
 	block = find_save(dir->file_name, 0, &last);
 
-	// 2. ����ҵ������������ǣ��򸲸�д��
-	// 2. If found and not verify mode, overwrite
+	// 2. 如果找到，且允许覆盖，则覆盖写入
+// 2. If found and overwrite is allowed, overwrite
 	if(block>0){
 		if(mode)
 			return BUP_FOUND;
@@ -497,22 +499,24 @@ int sro_bup_write(int dev, BUPDIR *dir, u8 *data, int mode)
 		return 0;
 	}
 
-	// 3. δ�ҵ����½��浵��
-	// 3. Not found, create new save
+	// 3. 未找到。新建存档。
+// 3. Not found. Create new save.
 	int free_block = (dev==0) ? BUPMEM->free_block: *(u16*)(MEMS_HEADER+0x0c);
 	printk("block_need=%d\n", block_need+1);
 	if((block_need+1) > free_block){
 		return BUP_NOT_ENOUGH_MEMORY;
 	}
 
-	// ������ʼ��
+	// 分配起始块
+// Allocate starting block
 	block = get_free_block(0);
 	hdr = block;
 
 	bp = get_block_addr(START_BLOCK|hdr);
 	printk("start at %04x %08x\n", hdr, bp);
 
-	// д��ʼ��
+	// 写开始块
+// Write starting block
 	memset(bp, 0, block_size);
 	memcpy(bp+0x00, dir->file_name, 11);
 	*(u32*)(bp+0x0c) = dir->data_size;
@@ -520,7 +524,8 @@ int sro_bup_write(int dev, BUPDIR *dir, u8 *data, int mode)
 	bp[0x1b] = dir->language;
 	*(u32*)(bp+0x1c) = dir->date;
 
-	// �����
+	// 分配块
+// Allocate blocks
 	block = 0;
 	for(i=0; i<block_need; i++){
 		block = get_free_block(block);
@@ -532,10 +537,12 @@ int sro_bup_write(int dev, BUPDIR *dir, u8 *data, int mode)
 		block += 1;
 	}
 
-	// д����
+	// 写数据
+// Write data
 	access_data(hdr, data, 2);
 
-	// ����lastָ��
+	// 更新last指针
+// Update last pointer
 	if(dev==1){
 		memcpy((u8*)MEMS_HEADER+0x400+last*16, dir->file_name, 11);
 		*(u16*)(MEMS_HEADER+0x400+last*16+0x0e) = hdr;
@@ -604,7 +611,8 @@ int sro_bup_delete(int dev, char *file_name)
 	bp = get_block_addr(START_BLOCK|block);
 
 	has_data = 1;
-	// �ͷſ�ʼ��
+	// 释放开始块
+// Release starting block
 	if(dev==0){
 		set_bitmap((u8*)BUPMEM->bitmap, block, 0);
 		BUPMEM->free_block += 1;
@@ -616,7 +624,8 @@ int sro_bup_delete(int dev, char *file_name)
 			has_data = 0;
 	}
 
-	// �ͷ����ݿ�
+// 释放数据块
+// Release data blocks
 	if(has_data){
 		u8 *bmp = bp+0x40;
 		block = 0;
@@ -639,7 +648,8 @@ int sro_bup_delete(int dev, char *file_name)
 		}
 	}
 
-	// ����lastָ��
+	// 更新last指针
+// Update last pointer
 	if(dev==1){
 		memset((u8*)MEMS_HEADER+1024+last*16, 0, 16);
 	}else{
